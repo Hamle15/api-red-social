@@ -1,13 +1,16 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
+const jwt = require("../services/jwt");
 
 //ActionsTest
 const pruebaUsers = (req, res) => {
   return res.status(200).send({
     message: "Mensaje Sended from: controllers/user.js",
+    usuario: req.user,
   });
 };
 
+//Toca ver como corregirla 
 const register3 = async (req, res) => {
   //Take de info of teh body
   let params = req.body;
@@ -81,7 +84,7 @@ const register = (req, res) => {
 
   User.find({
     $or: [
-      { email: params.email.toLowerCase() },
+      { email: params.email},
       { nick: params.nick.toLowerCase() },
     ],
   })
@@ -120,7 +123,97 @@ const register = (req, res) => {
     });
 };
 
+const login = async (req, res ) => {
+
+  //Take the params
+  let params = req.body;
+
+  if(!params.email || !params.password){
+    return res.status(400).send({
+      status: "error",
+      message: "Missing data"
+    });
+  }
+
+  try {
+    //Search in DB the email
+    const userFind = await User.findOne({email: params.email})
+    // .select({"password": 0})
+    .exec(); //se puede quitar el excec
+    if(!userFind){
+      return res.status(404).send({
+        status: "error",
+        menssage: "Mail o Password Incorrect",
+        message2: "Para Hamlet: NO EXISTE EL USUARIO PERO SE PONE POR SI"
+      });
+    }
+
+    //Check the password
+    const pwd = bcrypt.compareSync(params.password, userFind.password);
+    
+    if(!pwd){
+      return res.status(400).send({
+        status: "error",
+        menssage: "Mail o Password Incorrect"
+      })
+    }
+
+    //Token
+    const token = jwt.createToken(userFind);
+
+    //Data User
+    return res.status(200).json({
+      message: "You have identificy correctly",
+      user: {
+        id: userFind._id,
+        name: userFind.name,
+        nick: userFind.nick,
+      },
+      token
+    });
+  } catch (error) {
+    return res.status(404).send({
+      status: "error",
+      menssage: "The user do not exist",
+    }); 
+  }
+}
+
+const profile = async (req, res) => {
+  //Recibir el paramatro por la url
+  const id = req.params.id;
+
+
+  
+
+  try {
+    //Consulta sacar los datos de el usuario
+    const userProfile = await User.findById(id).select({password: 0, role: 0}).exec();
+    if(!userProfile){
+      return res.status(404).send({
+        status: "error",
+        menssage: "The user did not exist"
+      })
+    }
+
+    //Return result 
+    //POsteriormente: devlver informacion de follows
+    return res.status(200).json({
+      status: "succes",
+      user: userProfile,
+    })
+  } catch (error) {
+    return res.status(404).send({
+      status: "error",
+      menssage: "The user did not exist"
+    })
+  }
+
+  
+}
 module.exports = {
   pruebaUsers,
   register,
+  login,
+  profile,
 };
