@@ -4,6 +4,7 @@ const jwt = require("../services/jwt");
 const moongoosePaguinate = require("mongoose-pagination");
 const fs = require("fs");
 const path = require("path");
+const followService = require("../services/followService");
 
 //ActionsTest
 const pruebaUsers = (req, res) => {
@@ -202,11 +203,16 @@ const profile = async (req, res) => {
       });
     }
 
-    //Return result
-    //POsteriormente: devlver informacion de follows
+    //Info de seguimiento
+    const followInfo = await followService.followThisUser(req.user.id, id);
+
+    //Posteriormente: devlver informacion de follows
+
     return res.status(200).json({
       status: "succes",
       user: userProfile,
+      followin: followInfo.following,
+      follower: followInfo.followers,
     });
   } catch (error) {
     return res.status(404).send({
@@ -237,6 +243,8 @@ const list = async (req, res) => {
       });
     }
 
+    let followUsersIds = await followService.followUserIds(req.user.id);
+
     //Devolver el resultado (posterior info folllow)
     return res.status(200).send({
       status: "succes",
@@ -245,6 +253,8 @@ const list = async (req, res) => {
       total,
       itemsPerPage,
       pages: Math.ceil(total / itemsPerPage),
+      users_following: followUsersIds.followingClean,
+      user_follow_me: followUsersIds.followersClean,
     });
   } catch (error) {
     return res.status(404).send({
@@ -348,8 +358,8 @@ const upload = (req, res) => {
   }
 
   //Si es correcto guardar en BD
-  User.findByIdAndUpdate(
-    req.user.id,
+  User.findOneAndUpdate(
+    { _id: req.user.id },
 
     { avatar: req.file.filename },
     { new: true }

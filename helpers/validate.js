@@ -15,7 +15,7 @@ const findUserByEmail = (email, res) => {
     .catch((error) => {
       return res.status(500).json({
         status: "error",
-        message: error.message,
+        message: "The user does not exist",
       });
     });
 };
