@@ -13,7 +13,7 @@ const createToken = (user) => {
     role: user.role,
     avatar: user.avatar,
     iat: moment().unix(), //fecha de escrita de forma rara
-    exp: moment().add(1, "hour").unix(),
+    exp: moment().add(30, "days").unix(),
   };
 
   //Devolver JWT

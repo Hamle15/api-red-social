@@ -1,5 +1,5 @@
 const Publication = require("../models/Publication");
-
+const { findUserByEmail } = require("../helpers/validateUser");
 const testPublication = (req, res) => {
   return res.status(200).send({
     message: "Message sended: controllers/publication",
@@ -26,7 +26,7 @@ const save = (req, res) => {
   if (palabras.length > 64) {
     return res.status(400).json({
       status: "error",
-      menssage: "El texto debe tener entre 4 y 1 palabra",
+      menssage: "El texto no debe tener mas de 64 palabras",
       palabras: palabras.length,
       textoLimpio,
       params,
@@ -66,11 +66,80 @@ const save = (req, res) => {
 
 //Sacar una publicacion en contreto
 
-//Delete publicacion
+const detail = (req, res) => {
+  //Sacar id de las url
+  const publicacionId = req.params.id;
 
-//List all publicacion of user that i follow
+  //Find con la condicion del id
+
+  Publication.findById(publicacionId)
+    .then((publicationStored) => {
+      if (!publicationStored) {
+        return res.status(400).send({
+          status: "error",
+          menssage: "El id no existe",
+        });
+      }
+      //Devolver respuesta
+      return res.status(200).json({
+        status: "succes",
+        publicationStored,
+      });
+    })
+    .catch((error) => {
+      return res.status(400).send({
+        status: "error",
+        menssage: "La publicacion no existe",
+      });
+    });
+};
+
+//Delete publicacion
+const remove = (req, res) => {
+  findUserByEmail(req.user.email)
+    .then(() => {
+      const publicacionId = req.params.id;
+
+      Publication.find({ user: req.user.id, _id: publicacionId })
+        .deleteOne()
+        .then((result) => {
+          if (result.deletedCount === 0) {
+            return res.status(400).json({
+              status: "error",
+              message: "The publicacion does not exist",
+            });
+          }
+          return res.status(200).json({
+            status: "success",
+            message: "Route Remove",
+            publicacionId,
+          });
+        })
+        .catch((error) => {
+          return res.status(400).json({
+            status: "error",
+            message: "The publicacion do not exist",
+          });
+        });
+    })
+    .catch((error) => {
+      return res.status(404).json({
+        status: "error",
+        message: error.message,
+      });
+    });
+};
 
 // Listar publicacion de un usuario
+const user = (req, res) => {
+  return res.status(200).send({
+    status: "succes",
+    menssage: "Publicaciones del usuario",
+    user: req.user,
+  });
+};
+
+//List all publicacion of user that i follow
 
 // Subir ficheros
 
@@ -79,4 +148,7 @@ const save = (req, res) => {
 module.exports = {
   testPublication,
   save,
+  detail,
+  remove,
+  user,
 };
