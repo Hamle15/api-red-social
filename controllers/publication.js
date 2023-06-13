@@ -1,5 +1,7 @@
 const Publication = require("../models/Publication");
+const User = require("../models/User");
 const { findUserByEmail } = require("../helpers/validateUser");
+
 const testPublication = (req, res) => {
   return res.status(200).send({
     message: "Message sended: controllers/publication",
@@ -132,10 +134,48 @@ const remove = (req, res) => {
 
 // Listar publicacion de un usuario
 const user = (req, res) => {
-  return res.status(200).send({
-    status: "succes",
-    menssage: "Publicaciones del usuario",
-    user: req.user,
+  const userId = req.params.id;
+
+  //Controlar paguina
+  let page = 1;
+
+  if (req.params.page) {
+    page = req.params.page;
+  }
+
+  const itemsPerPage = 5;
+
+  Publication.countDocuments({ user: userId }).then((totalDocs) => {
+    Publication.find({ user: userId })
+      .sort("-created_at")
+      .select("-user")
+      .paginate(page, itemsPerPage)
+      .then((publication) => {
+        User.findById(userId)
+          .select("-password -role -__v -created_at")
+          .then((user) => {
+            if (!publication) {
+              return res.status(404).send({
+                status: "error",
+                menssage: "El usuario no existe",
+              });
+            }
+            return res.status(200).send({
+              status: "succes",
+              menssage: "Publicaciones del usuario",
+              totalDocs,
+              pages: Math.ceil(totalDocs / itemsPerPage),
+              userIdentify: user,
+              publication,
+            });
+          });
+      })
+      .catch((error) => {
+        return res.status(404).send({
+          status: "error",
+          menssage: "El usuario no existe",
+        });
+      });
   });
 };
 
