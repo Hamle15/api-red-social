@@ -1,6 +1,8 @@
 const Publication = require("../models/Publication");
 const User = require("../models/User");
 const { findUserByEmail } = require("../helpers/validateUser");
+const fs = require("fs");
+const path = require("path");
 
 const testPublication = (req, res) => {
   return res.status(200).send({
@@ -133,57 +135,170 @@ const remove = (req, res) => {
 };
 
 // Listar publicacion de un usuario
-const user = (req, res) => {
-  const userId = req.params.id;
+const user = async (req, res) => {
+  try {
+    const userId = req.params.id;
 
-  //Controlar paguina
-  let page = 1;
+    // Controlar página
+    let page = 1;
 
-  if (req.params.page) {
-    page = req.params.page;
+    if (req.params.page) {
+      page = req.params.page;
+    }
+
+    const itemsPerPage = 5;
+
+    const totalDocs = await Publication.countDocuments({ user: userId });
+
+    const publication = await Publication.find({ user: userId })
+      .sort("-created_at")
+      // .populate("user", "-password -__v")
+      .select("-user -__v")
+      .paginate(page, itemsPerPage);
+
+    const user = await User.findById(userId).select(
+      "-password -role -__v -created_at"
+    );
+
+    return res.status(200).send({
+      status: "success",
+      message: "Publicaciones del usuario",
+      totalDocs,
+      pages: Math.ceil(totalDocs / itemsPerPage),
+      userIdentify: user,
+      publication,
+    });
+  } catch (error) {
+    return res.status(404).send({
+      status: "error",
+      message: "El usuario no existe",
+    });
+  }
+};
+
+// Subir ficheros
+
+const upload = (req, res) => {
+  //Sacar publicacion id
+
+  const publicationId = req.params.id;
+  if (!req.file) {
+    return res.status(404).send({
+      status: "error",
+      menssage: "Inlcuir Imagen",
+    });
   }
 
-  const itemsPerPage = 5;
+  let image = req.file.originalname;
 
-  Publication.countDocuments({ user: userId }).then((totalDocs) => {
-    Publication.find({ user: userId })
-      .sort("-created_at")
-      .select("-user")
-      .paginate(page, itemsPerPage)
-      .then((publication) => {
-        User.findById(userId)
-          .select("-password -role -__v -created_at")
-          .then((user) => {
-            if (!publication) {
-              return res.status(404).send({
-                status: "error",
-                menssage: "El usuario no existe",
-              });
-            }
-            return res.status(200).send({
-              status: "succes",
-              menssage: "Publicaciones del usuario",
-              totalDocs,
-              pages: Math.ceil(totalDocs / itemsPerPage),
-              userIdentify: user,
-              publication,
-            });
-          });
-      })
-      .catch((error) => {
-        return res.status(404).send({
+  const imageSplit = image.split(".");
+  const extension = imageSplit[1];
+
+  if (
+    extension != "png" &&
+    extension != "jpg" &&
+    extension != "jpeg" &&
+    extension != "gif"
+  ) {
+    //Borrar arichivo subido
+    const filePath = req.file.path;
+    const fileDelete = fs.unlinkSync(filePath);
+    //Devolver Res negativa
+    return res.status(400).send({
+      status: "error",
+      message: "Extension invalid",
+    });
+  }
+
+  Publication.findOneAndUpdate(
+    { user: req.user.id, _id: publicationId },
+    { file: req.file.filename },
+    { new: true }
+  )
+    .then((publicationUpdate) => {
+      if (!publicationUpdate) {
+        return res.status(500).send({
           status: "error",
-          menssage: "El usuario no existe",
+          message: "Error en la subida del avatar",
         });
+      }
+      return res.status(200).send({
+        status: "succes",
+        publication: publicationUpdate,
+        file: req.file,
       });
-  });
+    })
+    .catch((error) => {
+      return res.status(500).send({
+        status: "error",
+        message: "Error en la subida del avatar",
+      });
+    });
 };
 
 //List all publicacion of user that i follow
 
-// Subir ficheros
-
 //Devolver archivos multimedia
+
+const media = (req, res) => {
+  const publicationId = req.params.id;
+
+  // Buscar la publicación por su ID en la base de datos
+  Publication.findById(publicationId)
+    .then((publication) => {
+      if (!publication) {
+        return res.status(404).send({
+          status: "error",
+          message: "Publication not found",
+        });
+      }
+
+      // Obtener el nombre del archivo de la publicación
+      const fileName = publication.file;
+
+      // Montar el path utilizando el nombre de archivo obtenido
+      const filePath = `./uploads/publications/${fileName}`;
+
+      // Comprobar que el archivo existe
+      fs.stat(filePath, (error, stats) => {
+        if (error || !stats.isFile()) {
+          return res.status(404).send({
+            status: "error",
+            message: "La publicación no tiene imagen",
+          });
+        }
+
+        // Devolver el archivo como respuesta
+        return res.sendFile(path.resolve(filePath));
+      });
+    })
+    .catch((error) => {
+      return res.status(500).send({
+        status: "error",
+        message: "La publicacion no existe",
+      });
+    });
+};
+
+/*const media = (req, res) => {
+  //Sacar el param de la url
+  const file = req.params.file;
+
+  //Montar el path
+  const filePath = "./uploads/publications/" + file;
+
+  //Comprobar que existe
+  fs.stat(filePath, (error, exists) => {
+    if (!exists) {
+      return res.status(404).send({
+        status: "error",
+        menssage: "the image do not exist",
+      });
+    }
+    //Devolver el file
+    return res.sendFile(path.resolve(filePath));
+  });
+};*/
 
 module.exports = {
   testPublication,
@@ -191,4 +306,6 @@ module.exports = {
   detail,
   remove,
   user,
+  upload,
+  media,
 };
