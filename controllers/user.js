@@ -5,6 +5,10 @@ const moongoosePaguinate = require("mongoose-pagination");
 const fs = require("fs");
 const path = require("path");
 const followService = require("../services/followService");
+const Follow = require("../models/Follow");
+const Publication = require("../models/Publication");
+
+const { validate } = require("../helpers/validateRegister");
 
 //ActionsTest
 const pruebaUsers = (req, res) => {
@@ -82,14 +86,24 @@ const register = (req, res) => {
   if (!params.name || !params.email || !params.password || !params.nick) {
     return res.status(400).json({
       status: "error",
-      message: "Missing data to send ",
+      message: "Missing data to send",
+    });
+  }
+
+  // Validación avanzada
+  const validationResult = validate(params);
+  if (!validationResult.valid) {
+    return res.status(400).json({
+      status: "error",
+      message: "Validation error",
+      errors: validationResult.errors,
     });
   }
 
   if (params.nick.length >= 10) {
     return res.status(400).json({
       status: "error",
-      menssage: "The nick is to long",
+      message: "The nick is too long",
     });
   }
 
@@ -99,8 +113,8 @@ const register = (req, res) => {
     .exec()
     .then(async (users) => {
       if (users && users.length >= 1) {
-        return res.status(500).send({
-          status: "succes",
+        return res.status(500).json({
+          status: "error",
           message: "El usuario ya existe",
         });
       }
@@ -112,14 +126,14 @@ const register = (req, res) => {
 
       user_to_save.save().then((userStored) => {
         if (!userStored) {
-          return res.status(500).send({
+          return res.status(500).json({
             status: "error",
-            message: "Error to save de User",
+            message: "Error to save the User",
           });
         }
         return res.status(200).json({
-          status: "succes",
-          message: "User resgister corrtley",
+          status: "success",
+          message: "User registered successfully",
           user: userStored,
         });
       });
@@ -234,7 +248,10 @@ const list = async (req, res) => {
   let itemsPerPage = 5;
 
   try {
-    const UserFind = await User.find().sort("_id").paginate(page, itemsPerPage);
+    const UserFind = await User.find()
+      .select("-password -email -__v")
+      .sort("_id")
+      .paginate(page, itemsPerPage);
     const total = await User.countDocuments({}).exec();
     if (!UserFind) {
       return res.status(404).send({
@@ -296,6 +313,8 @@ const update = (req, res) => {
       if (userUpdate.password) {
         let pdw = await bcrypt.hash(userUpdate.password, 10);
         userUpdate.password = pdw;
+      } else {
+        delete userUpdate.password;
       }
 
       //Look and update
@@ -404,6 +423,32 @@ const avatar = (req, res) => {
     return res.sendFile(path.resolve(filePath));
   });
 };
+
+const counters = async (req, res) => {
+  let userId = req.user.id;
+
+  if (req.params.id) {
+    userId = req.params.id;
+  }
+
+  try {
+    const following = await Follow.count({ user: userId });
+    const followers = await Follow.count({ followed: userId });
+    const publications = await Publication.count({ user: userId });
+
+    return res.status(200).send({
+      status: "succes",
+      following: following,
+      followers: followers,
+      publications: publications,
+    });
+  } catch (error) {
+    return res.status(500).send({
+      status: "error",
+      menssage: "The user do not exist",
+    });
+  }
+};
 module.exports = {
   pruebaUsers,
   register,
@@ -413,4 +458,5 @@ module.exports = {
   update,
   upload,
   avatar,
+  counters,
 };

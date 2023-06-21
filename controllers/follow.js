@@ -162,7 +162,7 @@ const following = (req, res) => {
       .then((totalDocs) => {
         // Encontrar los follows, popular datos de los usuarios y paginar con Mongoose paginate
         Follow.find({ user: userId })
-          .populate("user followed", "-password -role -__v")
+          .populate("user followed", "-password -role -__v -email")
           .paginate(page, itemsPerPage)
           .then(async (follows) => {
             //Sacar usuarios que me siguen
@@ -173,8 +173,9 @@ const following = (req, res) => {
               follows,
               totalDocs,
               pages: Math.ceil(totalDocs / itemsPerPage),
-              users_following: followUsersIds.followingClean,
-              user_follow_me: followUsersIds.followersClean,
+              users_following: followUsersIds.following,
+              user_follow_me: followUsersIds.followers,
+              hola: followUsersIds,
             });
           })
           .catch((error) => {
@@ -212,7 +213,7 @@ const followers = (req, res) => {
     Follow.countDocuments({ user: userId }).then((totalDocs) => {
       // Encontrar los follows, popular datos de los usuarios y paginar con Mongoose paginate
       Follow.find({ followed: userId })
-        .populate("user", "-password -role -__v")
+        .populate("user", "-password -role -__v -email")
         .paginate(page, itemsPerPage)
         .then(async (follows) => {
           //Sacar usuarios que me siguen

@@ -26,8 +26,8 @@ const followUserIds = async (identityUserId) => {
       followersClean.push(follow.user);
     });
     return {
-      followingClean,
-      followersClean,
+      following: followingClean,
+      followers: followersClean,
     };
   } catch (error) {
     return {};

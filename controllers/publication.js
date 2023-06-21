@@ -3,6 +3,7 @@ const User = require("../models/User");
 const { findUserByEmail } = require("../helpers/validateUser");
 const fs = require("fs");
 const path = require("path");
+const followService = require("../services/followService");
 
 const testPublication = (req, res) => {
   return res.status(200).send({
@@ -157,7 +158,7 @@ const user = async (req, res) => {
       .paginate(page, itemsPerPage);
 
     const user = await User.findById(userId).select(
-      "-password -role -__v -created_at"
+      "-password -role -__v -created_at -email"
     );
 
     return res.status(200).send({
@@ -236,8 +237,6 @@ const upload = (req, res) => {
     });
 };
 
-//List all publicacion of user that i follow
-
 //Devolver archivos multimedia
 
 const media = (req, res) => {
@@ -300,6 +299,138 @@ const media = (req, res) => {
   });
 };*/
 
+//List all publicacion of user that i follow
+const feedModificado = async (req, res) => {
+  const userId = req.user.id;
+  let page = 1;
+
+  if (req.params.page) {
+    page = req.params.page;
+  }
+
+  const itemsPerPage = 5;
+
+  try {
+    const myFollows = await followService.followUserIds(userId);
+
+    const totalDocs = await Publication.countDocuments({
+      user: myFollows.following,
+    });
+
+    const publications = await Publication.aggregate([
+      {
+        //Filtra las publicaciones del los usuarios seguidos
+        $match: { user: { $in: myFollows.following } },
+      },
+      {
+        //Agrupa por id las publicaciones de los usuarios creando un nuevo array
+        $group: {
+          _id: "$user",
+          publications: { $push: "$$ROOT" },
+        },
+      },
+      {
+        //Obtiene los datos completos del usuario
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      {
+        $unwind: "$user",
+      },
+      {
+        $sort: { "publications.created_at": -1 },
+      },
+      {
+        $skip: (page - 1) * itemsPerPage,
+      },
+      {
+        $limit: itemsPerPage,
+      },
+      {
+        $project: {
+          "user.password": 0,
+          "user.email": 0,
+          "user.__v": 0,
+          "publications.user.password": 0,
+          "publications.user.email": 0,
+          "publications.user.__v": 0,
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          user: 1,
+          publications: "$publications",
+        },
+      },
+    ]);
+
+    return res.status(200).send({
+      status: "success",
+      message: "Route feed",
+      totalDocs,
+      pages: Math.ceil(totalDocs / itemsPerPage),
+      page,
+      myFollows: myFollows.following,
+      publications,
+    });
+  } catch (error) {
+    return res.status(500).send({
+      status: "error",
+      message: "Error interno, comuníquese con el soporte",
+    });
+  }
+};
+
+const feed = async (req, res) => {
+  const userId = req.user.id;
+  //Sacar paguina actual
+  let page = 1;
+
+  if (req.params.page) {
+    page = req.params.page;
+  }
+
+  //Establecer numero de  elementos por paguina
+  const itemsPerPage = 5;
+
+  try {
+    //Sacar array de ids de usuarios que yo sigo como usuario identificado
+    const myFollows = await followService.followUserIds(userId);
+
+    //Find a publicaciones in, ordernar, popular, paguinar
+    const totalDocs = await Publication.countDocuments({
+      user: myFollows.following,
+    });
+    const publications = await Publication.find({
+      user: myFollows.following /*{"$in": myFollows.following}*/,
+    })
+      .sort("-created_at")
+      .populate("user", "-password -email -__v")
+      .select("-__v") // Excluir el campo "__v"
+      .paginate(page, itemsPerPage);
+
+    return res.status(200).send({
+      status: "succes",
+      menssage: "Routa feed",
+      totalDocs,
+      pages: Math.ceil(totalDocs / itemsPerPage),
+      page,
+      myFollows: myFollows.following,
+      publications,
+    });
+  } catch (error) {
+    return res.status(500).send({
+      status: "error",
+      menssage: "Error interno comuniquese con el soporte",
+    });
+  }
+};
+
 module.exports = {
   testPublication,
   save,
@@ -308,4 +439,5 @@ module.exports = {
   user,
   upload,
   media,
+  feed,
 };
